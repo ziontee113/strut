@@ -106,14 +106,72 @@ local function next_group()
     return hl_groups[last_group]["group"]
 end
 
-function _G.match_add()
-    local pattern = vim.fn.expand("<cword>")
-    vim.fn.matchadd(next_group(), pattern)
+local get_visual_range = function()
+    local start_row, start_col = vim.fn.line("v"), vim.fn.col("v")
+    local end_row, end_col = vim.fn.line("."), vim.fn.col(".")
+
+    if vim.fn.mode() == "V" then
+        start_col, end_col = 1, vim.fn.col("$") - 1
+    end
+
+    if start_row > end_row then
+        start_row, end_row = end_row, start_row
+    end
+
+    if start_row == end_row and start_col > end_col then
+        start_col, end_col = end_col, start_col
+    end
+
+    return start_row, start_col, end_row, end_col
 end
 
-vim.keymap.set("n", "M", function()
-    vim.opt.opfunc = "v:lua.match_add"
+local match_id_map = {}
+local add_match = function(pattern)
+    local id = vim.fn.matchadd(next_group(), pattern)
+    match_id_map[pattern] = id
+end
+
+function _G.match_add_normal()
+    local pattern = vim.fn.expand("<cword>")
+    add_match(pattern)
+end
+
+local function match_add_visual()
+    local start_row, start_col, end_row, end_col = get_visual_range()
+    local lines =
+        vim.api.nvim_buf_get_text(0, start_row - 1, start_col - 1, end_row - 1, end_col, {})
+    local pattern = table.concat(lines, "\n")
+    add_match(pattern)
+end
+
+function _G.match_delete()
+    local matched = false
+    local _, cursor_col = unpack(vim.api.nvim_win_get_cursor(0))
+    local current_line = vim.api.nvim_get_current_line()
+    for pattern, id in pairs(match_id_map) do
+        local start_pos, end_pos = string.find(current_line, pattern)
+        if start_pos and end_pos and cursor_col >= start_pos - 1 and cursor_col <= end_pos - 1 then
+            vim.fn.matchdelete(id)
+            matched = true
+            break
+        end
+    end
+    if not matched then vim.cmd("norm! D") end
+end
+
+vim.keymap.set("n", "D", function()
+    vim.opt.opfunc = "v:lua.match_delete"
     return "g@<cr>"
 end, { expr = true })
+
+vim.keymap.set("n", "M", function()
+    vim.opt.opfunc = "v:lua.match_add_normal"
+    return "g@<cr>"
+end, { expr = true })
+
+vim.keymap.set("x", "M", function()
+    match_add_visual()
+    vim.api.nvim_input("<Esc>")
+end, {})
 
 return M
