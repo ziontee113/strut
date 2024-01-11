@@ -2,7 +2,7 @@ local M = {}
 
 local hl_groups = {
     { group = "MatchingAA", color = "#FF6188" },
-    { group = "MatchingAB", color = "#A9DC76" },
+    -- { group = "MatchingAB", color = "#A9DC76" },
     { group = "MatchingAC", color = "#78DCE8" },
     { group = "MatchingAD", color = "#FFD866" },
     { group = "MatchingAE", color = "#FC9867" },
@@ -128,6 +128,7 @@ end
 local match_id_map = {}
 local add_match = function(pattern)
     local id = vim.fn.matchadd(next_group(), pattern)
+    if match_id_map[pattern] then vim.fn.matchdelete(match_id_map[pattern]) end
     match_id_map[pattern] = id
 end
 
@@ -153,11 +154,92 @@ function _G.match_delete()
         if start_pos and end_pos and cursor_col >= start_pos - 1 and cursor_col <= end_pos - 1 then
             vim.fn.matchdelete(id)
             matched = true
+            match_id_map[pattern] = nil
             break
         end
     end
     if not matched then vim.cmd("norm! D") end
 end
+
+local function find_all_matches(str, pattern)
+    local matches = {}
+    local start_pos = 1
+    while true do
+        local start, finish = string.find(str, pattern, start_pos)
+        if start then
+            table.insert(matches, { start, finish })
+            start_pos = finish + 1
+        else
+            break
+        end
+    end
+    return matches
+end
+
+local function jump_to_previous_match()
+    local cursor_line, cursor_col = unpack(vim.api.nvim_win_get_cursor(0))
+    local lines = vim.api.nvim_buf_get_lines(0, 0, cursor_line, false)
+
+    for i = #lines, 1, -1 do
+        local line = lines[i]
+        local candidates = {}
+
+        for pattern in pairs(match_id_map) do
+            local matches = find_all_matches(line, pattern)
+
+            for j = #matches, 1, -1 do
+                local start, finish = unpack(matches[j])
+                table.insert(candidates, { start, finish })
+            end
+        end
+
+        for _, c in ipairs(candidates) do
+            local start = c[1]
+
+            if i == cursor_line and start < cursor_col - 1 then
+                vim.api.nvim_win_set_cursor(0, { i, start - 1 })
+                return
+            elseif i ~= cursor_line then
+                vim.api.nvim_win_set_cursor(0, { i, start - 1 })
+                return
+            end
+        end
+    end
+end
+
+local function jump_to_next_match()
+    local cursor_line, cursor_col = unpack(vim.api.nvim_win_get_cursor(0))
+    local lines = vim.api.nvim_buf_get_lines(0, cursor_line - 1, -1, false)
+
+    for i, line in ipairs(lines) do
+        local candidates = {}
+        local current_linenr = cursor_line + i - 1
+
+        for pattern in pairs(match_id_map) do
+            local matches = find_all_matches(line, pattern)
+
+            for _, match in ipairs(matches) do
+                local start, finish = unpack(match)
+                table.insert(candidates, { start, finish })
+            end
+        end
+
+        for _, c in ipairs(candidates) do
+            local start = c[1]
+
+            if current_linenr == cursor_line and start > cursor_col + 1 then
+                vim.api.nvim_win_set_cursor(0, { current_linenr, start - 1 })
+                return
+            elseif current_linenr ~= cursor_line then
+                vim.api.nvim_win_set_cursor(0, { current_linenr, start - 1 })
+                return
+            end
+        end
+    end
+end
+
+vim.keymap.set("n", "<C-k>", function() jump_to_previous_match() end, {})
+vim.keymap.set("n", "<C-j>", function() jump_to_next_match() end, {})
 
 vim.keymap.set("n", "D", function()
     vim.opt.opfunc = "v:lua.match_delete"
