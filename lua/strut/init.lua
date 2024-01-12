@@ -151,7 +151,8 @@ function _G.match_delete()
     local _, cursor_col = unpack(vim.api.nvim_win_get_cursor(0))
     local current_line = vim.api.nvim_get_current_line()
     for pattern, id in pairs(match_id_map) do
-        local start_pos, end_pos = string.find(current_line, pattern)
+        local regex = vim.regex(pattern)
+        local start_pos, end_pos = regex:match_str(current_line)
         if start_pos and end_pos and cursor_col >= start_pos - 1 and cursor_col <= end_pos - 1 then
             vim.fn.matchdelete(id)
             matched = true
@@ -165,10 +166,12 @@ end
 local function find_all_matches(str, pattern)
     local matches = {}
     local start_pos = 1
+    local regex = vim.regex(pattern)
     while true do
-        local start, finish = string.find(str, pattern, start_pos)
-        if start then
-            table.insert(matches, { start, finish })
+        local sub_str = str:sub(start_pos)
+        local start, finish = regex:match_str(sub_str)
+        if start and finish then
+            table.insert(matches, { start + 1, finish + 1 })
             start_pos = finish + 1
         else
             break
