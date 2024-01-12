@@ -2,12 +2,12 @@ local M = {}
 
 local hl_groups = {
     { group = "MatchingAA", color = "#FF6188" },
-    -- { group = "MatchingAB", color = "#A9DC76" },
+    { group = "MatchingAB", color = "#A9DC76" },
     { group = "MatchingAC", color = "#78DCE8" },
     { group = "MatchingAD", color = "#FFD866" },
     { group = "MatchingAE", color = "#FC9867" },
     { group = "MatchingAF", color = "#AB9DF2" },
-    { group = "MatchingAG", color = "darkred" },
+    -- { group = "MatchingAG", color = "darkred" },
     { group = "MatchingAH", color = "#FD6883" },
     { group = "MatchingAI", color = "#1981F0" },
     { group = "MatchingAJ", color = "#6EABEC" },
@@ -127,7 +127,8 @@ end
 
 local match_id_map = {}
 local add_match = function(pattern)
-    local id = vim.fn.matchadd(next_group(), pattern)
+    local escaped_pattern = vim.fn.escape(pattern, "./\\")
+    local id = vim.fn.matchadd(next_group(), escaped_pattern)
     if match_id_map[pattern] then vim.fn.matchdelete(match_id_map[pattern]) end
     match_id_map[pattern] = id
 end
@@ -238,8 +239,8 @@ local function jump_to_next_match()
     end
 end
 
-vim.keymap.set("n", "<C-k>", function() jump_to_previous_match() end, {})
-vim.keymap.set("n", "<C-j>", function() jump_to_next_match() end, {})
+vim.keymap.set("n", "<A-k>", function() jump_to_previous_match() end, {})
+vim.keymap.set("n", "<A-j>", function() jump_to_next_match() end, {})
 
 vim.keymap.set("n", "D", function()
     vim.opt.opfunc = "v:lua.match_delete"
